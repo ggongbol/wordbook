@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>호그와트 마법 단어장 (구글 번역)</title>
+
+    <link rel="manifest" href="manifest.json">
+
     <style>
         :root {
             --magic-red: #740001;
@@ -222,6 +225,16 @@
 
     // 페이지 시작 시 목록 자동 로드
     window.onload = loadHistory;
-</script>
+
+</script><script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('지팡이 등록 완료 (서비스 워커 성공):', reg.scope))
+                    .catch(err => console.log('마법 실패 (서비스 워커 에러):', err));
+            });
+        }
+    </script>
+
 </body>
 </html>

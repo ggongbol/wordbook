@@ -1,0 +1,16 @@
+{
+  "name": "호그와트 마법 단어장",
+  "short_name": "마법단어장",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#f4ebd9",
+  "theme_color": "#740001",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/9721/9721110.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

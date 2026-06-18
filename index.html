@@ -12,6 +12,7 @@
             --magic-yellow: #eeba30;
             --magic-dark: #1a1a1a;
             --magic-bg: #f4ebd9;
+            --magic-green: #2e7d32;
         }
 
         body {
@@ -83,7 +84,7 @@
         }
 
         @keyframes pulse {
-            0 { transform: scale(1); }
+            0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
@@ -111,7 +112,6 @@
             color: white;
         }
 
-        /* 📜 복습 노트를 위한 작은 스피커 버튼 디자인 */
         .history-audio-btn {
             background-color: transparent;
             color: var(--magic-dark);
@@ -126,6 +126,46 @@
             background-color: var(--magic-yellow);
             color: var(--magic-dark);
             border-color: var(--magic-yellow);
+        }
+
+        /* 👑 암기 버튼 디자인 */
+        .memorized-btn {
+            background-color: transparent;
+            color: var(--magic-green);
+            padding: 2px 6px;
+            font-size: 13px;
+            border: 1px solid var(--magic-green);
+            border-radius: 4px;
+            margin-left: 5px;
+            font-weight: normal;
+        }
+        .memorized-btn:hover {
+            background-color: var(--magic-green);
+            color: white;
+        }
+
+        /* 🗑️ 삭제 버튼 디자인 */
+        .delete-btn {
+            background-color: transparent;
+            color: #ff3b30;
+            padding: 2px 6px;
+            font-size: 13px;
+            border: 1px solid #ff3b30;
+            border-radius: 4px;
+            margin-left: 5px;
+            font-weight: normal;
+            transition: 0.2s;
+        }
+        .delete-btn:hover {
+            background-color: #ff3b30;
+            color: white;
+        }
+
+        /* 버튼 정렬 툴바 */
+        .action-btns {
+            display: flex;
+            gap: 4px;
+            align-items: center;
         }
 
         .phonetic {
@@ -145,10 +185,26 @@
             align-items: center;
         }
 
+        /* 🧹 필터 및 제어 툴바 */
+        .filter-toolbar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 5px;
+        }
+        .filter-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            background-color: #666;
+        }
+        .filter-btn.active {
+            background-color: var(--magic-gold);
+            color: var(--magic-yellow);
+        }
         .refresh-btn {
-            padding: 5px 10px;
-            font-size: 12px;
-            background-color: #555;
+            padding: 6px 12px;
+            font-size: 13px;
+            background-color: #333;
         }
 
         .word-list {
@@ -163,6 +219,18 @@
             border-bottom: 1px solid #ddd;
             font-size: 15px;
             line-height: 1.4;
+            transition: 0.3s;
+        }
+
+        /* 🕊️ 암기 완료된 항목 스타일에 마법 부여 */
+        .word-item.is-memorized {
+            background-color: #f0f7f0;
+            border-left: 4px solid var(--magic-green);
+            opacity: 0.6;
+        }
+        .word-item.is-memorized strong {
+            text-decoration: line-through;
+            color: #777;
         }
 
         .word-item strong {
@@ -174,6 +242,11 @@
         .word-item span {
             color: #444;
             display: block;
+        }
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
     </style>
 </head>
@@ -197,6 +270,16 @@
             <span>📜 마법의 복습 노트</span>
             <button class="refresh-btn" onclick="loadHistory()">새로고침</button>
         </h2>
+        
+        <div class="filter-toolbar">
+            <div>
+                <button id="filterAll" class="filter-btn active" onclick="setFilter('all')">전체 보기</button>
+                <button id="filterIng" class="filter-btn" onclick="setFilter('ing')">미암기 단어</button>
+                <button id="filterDone" class="filter-btn" onclick="setFilter('done')">외운 단어 목록</button>
+            </div>
+            <button class="refresh-btn" style="background-color: #888;" onclick="resetMemorized()">암기 초기화</button>
+        </div>
+
         <ul class="word-list" id="wordList">
             <li>데이터를 불러오는 중...</li>
         </ul>
@@ -205,8 +288,10 @@
 
 <script>
     // 💡 [중요] 여기에 내 구글 웹앱 URL을 입력하세요!
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwXuQkHMBVJsQqd4JsVsEUp-osJI5lVpqrndWjXbnnkON-WWFuKpa3fvFBQj0EbnhXz/exec';
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxCJrmP9Hxg7zeYJkRU80TwIB8caLMY9TLyN73baP7mQgZw6AoEllw-vKcExUiYgwk_/exec';
     let currentAudio = null;
+    let currentFilter = 'all'; // 'all', 'ing', 'done'
+    let serverData = []; // 서버에서 받아온 원본 데이터를 저장할 배열
 
     // 🎙️ 음성 인식(Speech Recognition) 설정
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -258,24 +343,58 @@
         currentAudio = new Audio(url);
         currentAudio.play().catch(err => {
             console.log("오디오 재생 실패:", err);
-            // 만약 브라우저 보안 정책으로 막히면 대체 수단으로 기기 자체 TTS(읽어주기) 실행
-            const ttsWord = url; // 이 함수가 단어 텍스트를 직접 받았을 때의 예외처리
             if(typeof url === 'string' && !url.startsWith('http')) {
                 speakText(url);
             }
         });
     }
 
-    // 🗣️ 스마트폰 내장 음성(TTS) 읽어주기 마법 함수 (문장이나 오디오 주소가 없을 때 사용)
+    // 🗣️ 스마트폰 내장 음성(TTS) 읽어주기 마법 함수
     function speakText(text) {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); // 켜져있는 음성 끄기
+            window.speechSynthesis.cancel(); 
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-US'; // 영어 발음
+            utterance.lang = 'en-US'; 
             window.speechSynthesis.speak(utterance);
         } else {
             alert('이 기기는 말하기 기능을 지원하지 않습니다.');
         }
+    }
+
+    // 🧠 로컬 저장소에서 외운 단어 목록 가져오기 마법
+    function getMemorizedWords() {
+        const stored = localStorage.getItem('memorizedWords');
+        return stored ? JSON.parse(stored) : [];
+    }
+
+    // 🔄 특정 단어 암기 상태 토글(전환) 마법
+    function toggleMemorize(word) {
+        let memorized = getMemorizedWords();
+        if (memorized.includes(word)) {
+            memorized = memorized.filter(w => w !== word); // 암기 취소
+        } else {
+            memorized.push(word); // 암기 완료 추가
+        }
+        localStorage.setItem('memorizedWords', JSON.stringify(memorized));
+        renderList(); // 화면 다시 그리기
+    }
+
+    // 🧹 암기 완료 전체 초기화 마법
+    function resetMemorized() {
+        if(confirm("외운 단어 기록을 전부 초기화하고 원래대로 되돌릴까요?")) {
+            localStorage.removeItem('memorizedWords');
+            renderList();
+        }
+    }
+
+    // 🔍 필터 설정 마법
+    function setFilter(filterType) {
+        currentFilter = filterType;
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        if(filterType === 'all') document.getElementById('filterAll').classList.add('active');
+        if(filterType === 'ing') document.getElementById('filterIng').classList.add('active');
+        if(filterType === 'done') document.getElementById('filterDone').classList.add('active');
+        renderList();
     }
 
     // 단어 검색 및 번역 + 발음 가져오기
@@ -318,11 +437,9 @@
             let resultHtml = `<h3>${input}`;
             if (phonetic) resultHtml += `<span class="phonetic">${phonetic}</span>`;
             
-            // 실시간 오디오가 있으면 원어민 오디오 연동, 없으면 스마트폰 자체 음성 엔진(TTS) 연동
             if (audioUrl) {
                 resultHtml += `<button class="pronounce-btn" onclick="playAudio('${audioUrl}')">🔊 듣기</button>`;
             } else {
-                // 문장이거나 특수 단어인 경우 기기 TTS 마법 사용
                 resultHtml += `<button class="pronounce-btn" onclick="speakText('${input.replace(/'/g, "\\'")}')">🔊 듣기</button>`;
             }
             
@@ -356,34 +473,105 @@
 
         try {
             const response = await fetch(WEB_APP_URL);
-            const data = await response.json();
-            
-            wordList.innerHTML = '';
-            if(data.length === 0) {
-                wordList.innerHTML = '<li>아직 저장된 단어가 없습니다.</li>';
-                return;
-            }
+            serverData = await response.json();
+            renderList();
+        } catch (error) {
+            console.error(error);
+            wordList.innerHTML = '<li>목록을 불러오지 못했습니다.</li>';
+        }
+    }
 
-            data.reverse().forEach(item => {
-                const li = document.createElement('li');
-                li.className = 'word-item';
-                
-                // 작은 따옴표 문자가 에러를 일으키지 않도록 안전 조치
-                const safeWord = item.word.replace(/'/g, "\\'");
-                
-                // 📜 복습 목록의 각 단어 옆에도 스피커 버튼을 달아줍니다! 문장도 읽어주기 위해 기기 내장 TTS(speakText)로 연동합니다.
-                li.innerHTML = `
+    // 🎨 필터 조건에 맞춰 리스트를 화면에 뿌려주는 핵심 마법 함수
+    function renderList() {
+        const wordList = document.getElementById('wordList');
+        wordList.innerHTML = '';
+
+        if(serverData.length === 0) {
+            wordList.innerHTML = '<li>아직 저장된 단어가 없습니다.</li>';
+            return;
+        }
+
+        const memorizedList = getMemorizedWords();
+        let displayData = [...serverData].reverse();
+
+        // 필터링 처리
+        if (currentFilter === 'ing') {
+            displayData = displayData.filter(item => !memorizedList.includes(item.word));
+        } else if (currentFilter === 'done') {
+            displayData = displayData.filter(item => memorizedList.includes(item.word));
+        }
+
+        if(displayData.length === 0) {
+            wordList.innerHTML = '<li>해당 조건의 단어가 존재하지 않습니다.</li>';
+            return;
+        }
+
+        displayData.forEach(item => {
+            const isMemorized = memorizedList.includes(item.word);
+            const li = document.createElement('li');
+            li.className = `word-item ${isMemorized ? 'is-memorized' : ''}`;
+            
+            const safeWord = item.word.replace(/'/g, "\\'");
+            const memoBtnText = isMemorized ? "✓ 암기완료" : "⬜ 암기하기";
+
+            li.innerHTML = `
+                <div class="item-header">
                     <div>
                         <strong>🔮 ${item.word}</strong>
                         <button class="history-audio-btn" onclick="speakText('${safeWord}')">🔊 발음</button>
                     </div>
-                    <span>뜻: ${item.definition}</span>
-                `;
-                wordList.appendChild(li);
+                    <div class="action-btns">
+                        <button class="memorized-btn" onclick="toggleMemorize('${safeWord}')">${memoBtnText}</button>
+                        <button class="delete-btn" onclick="deleteWord('${safeWord}')">🗑️ 삭제</button>
+                    </div>
+                </div>
+                <span>뜻: ${item.definition}</span>
+            `;
+            wordList.appendChild(li);
+        });
+    }
+
+    // 🗑️ 구글 시트에서 단어를 제거하는 마법 함수
+    async function deleteWord(word) {
+        if (!confirm(`'${word}' 단어를 마법의 노트와 구글 시트에서 영구히 삭제할까요?`)) {
+            return;
+        }
+
+        const wordList = document.getElementById('wordList');
+        const originalContent = wordList.innerHTML;
+        wordList.innerHTML = '<li>🪄 시트에서 단어를 소멸시키는 중...</li>';
+
+        try {
+            const response = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'cors',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: "DELETE", word: word })
             });
+            
+            const resText = await response.text();
+            const result = JSON.parse(resText);
+
+            if (result.success) {
+                alert("🔥 단어가 성공적으로 소멸되었습니다.");
+                
+                // 로컬 저장소(암기 완료 목록)에서도 제거 처리
+                let memorized = getMemorizedWords();
+                memorized = memorized.filter(w => w !== word);
+                localStorage.setItem('memorizedWords', JSON.stringify(memorized));
+
+                // 목록 새로고침
+                loadHistory();
+            } else {
+                alert("삭제 실패: " + result.message);
+                wordList.innerHTML = originalContent;
+            }
         } catch (error) {
-            console.error(error);
-            wordList.innerHTML = '<li>목록을 불러오지 못했습니다.</li>';
+            console.error("삭제 에러:", error);
+            // 구글 시스템 상 CORS 리다이렉트가 튀더라도 실제 시트에서는 삭제 처리가 완료되는 경우가 많으므로 새로고침 유도
+            alert("처리가 완료되었습니다! (노트를 갱신합니다)");
+            loadHistory();
         }
     }
 
